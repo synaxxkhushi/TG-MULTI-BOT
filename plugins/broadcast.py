@@ -1,70 +1,71 @@
-import os
-import time
-import asyncio 
-import datetime
-from variables import ADMIN
-from helper.database import db
 from pyrogram.types import Message
-from pyrogram import Client, filters
-from pyrogram.errors import FloodWait, InputUserDeactivated, UserIsBlocked, PeerIdInvalid
+from pyrogram import filters, errors, enums
+from MyTgBot import bot
+from pyrogram.errors.exceptions.flood_420 import FloodWait
+from MyTgBot.database.db import add_user, add_group, all_users, all_groups, users, groups, remove_user
+import asyncio
 
+@bot.on_message(filters.command(["stats", "users"], ["/", "!", ".", "?"]))
+async def dbtool(_, m : Message):
+    if m.from_user.id !=1666544436:
+         return await m.reply_text("`You Don't Have Enough Rights To Do This!`")    
+    xx = all_users()
+    x = all_groups()
+    tot = int(xx + x)    
+    await m.reply_text(text=f"""
+📊 Chats Stats
+🙋‍♂️ Users : `{xx}`
+👥 Groups : `{x}`
+🚧 Total users & groups : `{tot}` """)
 
-@Client.on_message(filters.command("users") & filters.user(ADMIN))
-async def get_stats(bot, message):
-    mr = await message.reply('**𝙰𝙲𝙲𝙴𝚂𝚂𝙸𝙽𝙶 𝙳𝙴𝚃𝙰𝙸𝙻𝚂.....**')
-    total_users = await db.total_users_count()
-    await mr.edit( text=f"🔍 TOTAL USER'S = `{total_users}`")
-
-@Client.on_message(filters.command("broadcast") & filters.user(ADMIN) & filters.reply)
-async def broadcast_handler(bot: Client, m: Message):
-    all_users = await db.get_all_users()
-    broadcast_msg = m.reply_to_message
-    sts_msg = await m.reply_text("broadcast started !") 
-    done = 0
-    failed = 0
+@bot.on_message(filters.command(["bcast", "broadcast", "usercast"], ["/", "!", "?", "."]))
+async def bcast(_, m : Message):
+    if m.from_user.id !=1666544436:
+         return await m.reply_text("`You Don't Have Enough Rights To Do This!`")
+    allusers = users
+    lel = await m.reply_text("`⚡️ Processing.....`")
     success = 0
-    start_time = time.time()
-    total_users = await db.total_users_count()
-    async for user in all_users:
-        sts = await send_msg(user['id'], broadcast_msg)
-        if sts == 200:
-           success += 1
-        else:
-           failed += 1
-        if sts == 400:
-           await db.delete_user(user['id'])
-        done += 1
-        if not done % 20:
-           await sts_msg.edit(f"Broadcast in progress:\nnTotal Users {total_users}\nCompleted: {done} / {total_users}\nSuccess: {success}\nFailed: {failed}")
-    completed_in = datetime.timedelta(seconds=int(time.time() - start_time))
-    await sts_msg.edit(f"Broadcast Completed:\nCompleted in `{completed_in}`.\n\nTotal Users {total_users}\nCompleted: {done} / {total_users}\nSuccess: {success}\nFailed: {failed}")
- 
-         
-async def send_msg(user_id, message):
-    try:
-        await message.copy(chat_id=int(user_id))
-        return 200
-    except FloodWait as e:
-        await asyncio.sleep(e.value)
-        return send_msg(user_id, message)
-    except InputUserDeactivated:
-        print(f"{user_id} : deactivated")
-        return 400
-    except UserIsBlocked:
-        print(f"{user_id} : blocked the bot")
-        return 400
-    except PeerIdInvalid:
-        print(f"{user_id} : user id invalid")
-        return 400
-    except Exception as e:
-        print(f"{user_id} : {e}")
-        return 500
+    failed = 0
+    deactivated = 0
+    blocked = 0
+    for usrs in allusers.find():
+        try:
+            userid = usrs["user_id"]
+            #print(int(userid))
+            if m.reply_to_message:
+                await m.reply_to_message.copy(int(userid))
+            success +=1
+        except FloodWait as ex:
+            await asyncio.sleep(ex.value)
+        except errors.InputUserDeactivated:
+            deactivated +=1
+            remove_user(userid)
+        except errors.UserIsBlocked:
+            blocked +=1
+        except Exception as e:
+            print(e)
+            failed +=1
 
+    await lel.edit(f"✅ Successfull to sent `{success}` users.\n❌ Faild to sent `{failed}` users.\n👾 Found `{blocked}` Blocked users. \n👻 Found `{deactivated}` Deactivated users.")
 
+@bot.on_message(filters.command(["gcast", "groupcast"], ["/", "?", "!", "."]))
+async def gcast(_, m : Message):
+    if m.from_user.id !=1666544436:
+         return await m.reply_text("`You Don't Have Enough Rights To Do This!`")
+    allgroups = groups
+    lel = await m.reply_text("`⚡ Processing.....`")
+    success = 0
+    failed = 0
+    for grps in allgroups.find():
+        try:
+            chatid = grps["chat_id"]
+            if m.reply_to_message:
+                await m.reply_to_message.copy(int(chatid))
+            success +=1
+        except FloodWait as ex:
+            await asyncio.sleep(ex.value)
+        except Exception as e:
+            print(e)
+            failed +=1
 
-
-
-
-
-
-
+    await lel.edit(f"✅ Successfull to sent `{success}` groups.\n❌ Faild to sent `{failed}` groups.")
